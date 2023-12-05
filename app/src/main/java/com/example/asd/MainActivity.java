@@ -11,7 +11,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.core.view.WindowCompat;
@@ -34,15 +36,16 @@ import android.widget.TextView;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-
-    private AppBarConfiguration appBarConfiguration;
-    private ActivityMainBinding binding;
     private BookViewModel bookViewModel;
     private static final int NEW_BOOK_ACTIVITY_REQUEST_CODE = 1;
+    private static final int EDIT_BOOK_ACTIVITY_REQUEST_CODE = 2;
+    private Book editedBook = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        setContentView(R.layout.activity_main);
 
         RecyclerView recyclerView = findViewById(R.id.recyclerview);
         final BookAdapter adapter = new BookAdapter();
@@ -60,24 +63,6 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(intent, NEW_BOOK_ACTIVITY_REQUEST_CODE);
             }
         });
-
-        binding = ActivityMainBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
-
-//        setSupportActionBar(binding.toolbar);
-
-        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
-        appBarConfiguration = new AppBarConfiguration.Builder(navController.getGraph()).build();
-        NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
-
-//        binding.fab.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View view) {
-//                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-//                        .setAnchorView(R.id.fab)
-//                        .setAction("Action", null).show();
-//            }
-//        });
     }
 
     @Override
@@ -103,13 +88,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public boolean onSupportNavigateUp() {
-        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
-        return NavigationUI.navigateUp(navController, appBarConfiguration)
-                || super.onSupportNavigateUp();
-    }
-
-    @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
@@ -117,28 +95,95 @@ public class MainActivity extends AppCompatActivity {
         {
             Book book = new Book(data.getStringExtra(EditBookActivity.EXTRA_EDIT_BOOK_TITLE), data.getStringExtra((EditBookActivity.EXTRA_EDIT_BOOK_AUTHOR)));
             bookViewModel.insert(book);
-            Snackbar.make(findViewById(R.id.main_layout), getString(R.string.book_added), Snackbar.LENGTH_LONG).show();
+            Snackbar.make(findViewById(R.id.coordinator_layout), getString(R.string.book_added), Snackbar.LENGTH_LONG).show();
+        }
+        else if (requestCode == EDIT_BOOK_ACTIVITY_REQUEST_CODE && resultCode == RESULT_OK)
+        {
+            editedBook.setTitle(data.getStringExtra(EditBookActivity.EXTRA_EDIT_BOOK_TITLE));
+            editedBook.setAuthor(data.getStringExtra(EditBookActivity.EXTRA_EDIT_BOOK_AUTHOR));
+            bookViewModel.update(editedBook);
+            Snackbar.make(findViewById(R.id.coordinator_layout), getString(R.string.book_edited), Snackbar.LENGTH_LONG).show();
         }
         else
-            Snackbar.make(findViewById(R.id.main_layout), getString(R.string.empty_not_saved), Snackbar.LENGTH_LONG).show();
+            Snackbar.make(findViewById(R.id.coordinator_layout), getString(R.string.empty_not_saved), Snackbar.LENGTH_LONG).show();
     }
 
-    private class BookHolder extends RecyclerView.ViewHolder {
+    private class BookHolder extends RecyclerView.ViewHolder implements View.OnClickListener, View.OnLongClickListener, View.OnTouchListener{
         private TextView bookTitleTextView;
         private TextView bookAuthorTextView;
+        private Book book;
+        private GestureDetector gestureDetector;
+        private int threshhold = 100, velocity_threshhold = 100;
+
 
         public BookHolder (LayoutInflater inflater, ViewGroup parent)
         {
             super(inflater.inflate(R.layout.book_list_item, parent, false));
+            itemView.setOnClickListener(this);
+            itemView.setOnLongClickListener(this);
+            itemView.setOnTouchListener(this);
 
-            bookTitleTextView = findViewById(R.id.book_item_title);
-            bookAuthorTextView = findViewById(R.id.book_item_author);
+            bookTitleTextView = itemView.findViewById(R.id.book_item_title);
+            bookAuthorTextView = itemView.findViewById(R.id.book_item_author);
+
+            GestureDetector.SimpleOnGestureListener listener = new GestureDetector.SimpleOnGestureListener(){
+                @Override
+                public boolean onDown(@NonNull MotionEvent e) {
+                    return true;
+                }
+
+                @Override
+                public boolean onFling(@Nullable MotionEvent e1, @NonNull MotionEvent e2, float velocityX, float velocityY) {
+                    float xDiff = e2.getX() - e1.getX();
+                    float yDiff = e2.getY() - e1.getY();
+                    try {
+                        if (Math.abs(xDiff) > threshhold && velocityX > velocity_threshhold)
+                        {
+                            if (xDiff > 0)
+                            {
+                                Log.d("Swipe", "Swiped right");
+                                Snackbar.make(findViewById(R.id.coordinator_layout), getString(R.string.book_archived), Snackbar.LENGTH_LONG).show();
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                    }
+                    return false;
+                }
+            };
+            gestureDetector = new GestureDetector(listener);
         }
 
         public void bind(Book book)
         {
+            this.book = book;
+            Log.d("Custom", "bind " + book.getTitle());
             bookTitleTextView.setText(book.getTitle());
             bookAuthorTextView.setText(book.getAuthor());
+        }
+
+        @Override
+        public void onClick(View v) {
+            editedBook = book;
+            Log.d("Click", "OnClick" + book.getTitle());
+            Intent intent = new Intent(MainActivity.this, EditBookActivity.class);
+            intent.putExtra(EditBookActivity.EXTRA_EDIT_BOOK_TITLE, book.getTitle());
+            intent.putExtra(EditBookActivity.EXTRA_EDIT_BOOK_AUTHOR, book.getAuthor());
+            startActivityForResult(intent, EDIT_BOOK_ACTIVITY_REQUEST_CODE);
+        }
+
+        @Override
+        public boolean onLongClick(View v) {
+            bookViewModel.delete(book);
+            return false;
+        }
+
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            Log.d("touch", "OnTouch");
+            return gestureDetector.onTouchEvent(event);
         }
     }
 

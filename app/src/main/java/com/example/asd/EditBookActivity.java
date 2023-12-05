@@ -23,6 +23,12 @@ public class EditBookActivity extends AppCompatActivity {
         editTitleEditText = findViewById(R.id.edit_book_title);
         editAuthorEditText = findViewById(R.id.edit_book_author);
 
+        Intent intent = getIntent();
+        if (intent.hasExtra(EXTRA_EDIT_BOOK_TITLE))
+            editTitleEditText.setText(intent.getStringExtra(EXTRA_EDIT_BOOK_TITLE));
+        if (intent.hasExtra(EXTRA_EDIT_BOOK_AUTHOR))
+            editAuthorEditText.setText(intent.getStringExtra(EXTRA_EDIT_BOOK_AUTHOR));
+
         final Button button = findViewById(R.id.button_save);
         button.setOnClickListener(view -> {
             Intent replyIntent = new Intent();
